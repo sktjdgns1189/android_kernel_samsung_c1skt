@@ -307,4 +307,10 @@ config CHARGER_MAX77693_BAT
         help
           Say Y here to enable support for the MAX77693 charger
 
+config CHARGE_LEVEL
+        tristate "Charge level interface"
+        depends on BATTERY_SAMSUNG
+        help
+          Developed by AndiP71, allows configuration of various charging levels.
+
 endif # POWER_SUPPLY
