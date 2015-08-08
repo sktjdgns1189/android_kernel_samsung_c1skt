@@ -34,7 +34,7 @@ static void cpu_down_work()
 	int cpu;
 
 	for_each_online_cpu(cpu) {
-		if (cpu == 0)
+		if (cpu == 0 || cpu == 1)
 			continue;
 		cpu_down(cpu);
 	}
