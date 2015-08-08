@@ -2942,4 +2942,3 @@ module_exit(samsung_battery_exit);
 MODULE_AUTHOR("SangYoung Son <hello.son@samsung.com>");
 MODULE_DESCRIPTION("SAMSUNG battery driver");
 MODULE_LICENSE("GPL");
-Z
