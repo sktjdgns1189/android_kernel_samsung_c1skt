@@ -128,7 +128,9 @@
 static struct class *mdnie_class;
 struct mdnie_info *g_mdnie;
 
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 int mdnie_preset = 0;
+#endif
 
 static int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *seq)
 {
@@ -176,12 +178,16 @@ static struct mdnie_tuning_info *mdnie_request_table(struct mdnie_info *mdnie)
 		table = &color_tone_table[mdnie->scenario % COLOR_TONE_1];
 		goto exit;
 	} else if (mdnie->scenario < SCENARIO_MAX) {
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 		// depending on sharpness tweak status, take either normal or
 		// tweaked tuning table
 		if (mdnie_preset == 0)
 			table = &tuning_table[mdnie->cabc][mdnie->mode][mdnie->scenario];
 		else
 			table = &tuning_table_sharp_tweak[mdnie->cabc][mdnie->mode][mdnie->scenario];
+#else
+		table = &tuning_table[mdnie->cabc][mdnie->mode][mdnie->scenario];
+#endif
 		goto exit;
 	}
 

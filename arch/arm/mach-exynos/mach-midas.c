@@ -4112,7 +4112,7 @@ static void __init exynos4_reserve_mem(void)
 		},
 #else /*defined(CONFIG_DMA_CMA)*/
 #if defined(CONFIG_USE_MFC_CMA)
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_WATCH)
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_WATCH) || defined(CONFIG_MACH_BAFFIN)
 #ifdef CONFIG_ION_EXYNOS_CONTIGHEAP_SIZE
 		{
 			.name = "ion",
@@ -5255,7 +5255,7 @@ static void __init exynos4_reserve(void)
 #endif
 
 #if defined(CONFIG_USE_MFC_CMA)
-#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_WATCH)
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_WATCH) || defined(CONFIG_MACH_BAFFIN)
 	ret = dma_declare_contiguous(&s5p_device_mfc.dev,
 			0x02800000, 0x5C800000, 0);
 #elif defined(CONFIG_MACH_ZEST)

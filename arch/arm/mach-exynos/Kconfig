@@ -1172,8 +1172,10 @@ config MACH_GRANDE
 
 config MACH_BAFFIN
 	bool "BAFFIN board"
+	select S3C_DEV_I2C2
 	select S3C_DEV_I2C4
 	select S3C_DEV_I2C5
+	select EXYNOS4_SETUP_I2C2
 
 config MACH_HD
 	bool "HD Board"

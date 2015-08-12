@@ -552,7 +552,7 @@ int mfc_init_mem_mgr(struct mfc_dev *dev)
 #if defined(CONFIG_S5P_MEM_CMA)
 #ifdef  CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
 #ifdef CONFIG_USE_MFC_CMA
-#if defined(CONFIG_MACH_M0)
+#if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_BAFFIN)
 	cma_infos[0].lower_bound = 0x5C100000;
 	cma_infos[0].upper_bound = 0x5F200000;
 	cma_infos[0].total_size  = 0x03100000;
