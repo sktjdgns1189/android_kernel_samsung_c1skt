@@ -400,7 +400,7 @@ static ssize_t touchkey_led_control(struct device *dev,
 
 		led_status = 1;
 
-	} else if (buf && buf[0] == '2' && led_status == 1) {
+	} else if (buf && buf[0] == '0' && led_status == 1) {
 		printk(KERN_INFO "[TSP] %s - off\n", __func__);
 		ret = cd->pdata->led_power(0);
 		if (ret < 0)
