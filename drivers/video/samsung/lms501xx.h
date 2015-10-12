@@ -41,6 +41,10 @@ const unsigned char SEQ_SET_CYC[] = {
 	0xB4, 0x02,
 };
 
+const unsigned char SEQ_SET_CYC_1DOT[] = {
+	0xB4, 0x01,
+};
+
 const unsigned char SEQ_SET_VCOM[] = {
 	0xB6,
 	0xB1, 0xAE, 0x00,
@@ -87,7 +91,7 @@ const unsigned char SEQ_SET_GAMMA[] = {
 
 const unsigned char SEQ_SET_CABC_PWM[] = {
 	0xC9,
-	0x0F, 0x00,
+	0x0F, 0x01, // 0x00: 32kHz, 0x01: 16kHz
 };
 
 unsigned char SEQ_SET_BL[] = {

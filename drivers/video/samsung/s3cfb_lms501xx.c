@@ -22,6 +22,7 @@
 #include <linux/workqueue.h>
 #include <linux/backlight.h>
 #include <linux/lcd.h>
+#include <linux/syscalls.h>
 #include <plat/gpio-cfg.h>
 #include <plat/regs-dsim.h>
 #include <mach/dsim.h>
@@ -82,6 +83,8 @@ struct lcd_info {
 	struct delayed_work		check_ddi;
 #endif
 	struct dsim_global		*dsim;
+
+	unsigned int			inversion;
 };
 
 static const unsigned int candela_table[GAMMA_MAX-1] = {
@@ -125,16 +128,15 @@ struct LCD_BRIGHTNESS tbl_normal = {
 	.max = 380,
 };
 
-
 struct LCD_BRIGHTNESS pwm_normal = {
-	.off = 0x00,
-	.deflt = 0x61,
-	.dim = 0x0d,
-	.min = 0x0d,
-	.min_center = 0x37,
-	.center = 0x61,
-	.center_max = 0x7d,
-	.max = 0x9a,
+	.off = 0,
+	.deflt = 94,
+	.dim = 8,
+	.min = 8,
+	.min_center = 51,
+	.center = 94,
+	.center_max = 141,
+	.max = 167,
 };
 
 struct LCD_BRIGHTNESS tbl_cabc = {
@@ -149,14 +151,14 @@ struct LCD_BRIGHTNESS tbl_cabc = {
 };
 
 struct LCD_BRIGHTNESS pwm_cabc = {
-	.off = 0x00,
-	.deflt = 0x55,
-	.dim = 0x0d,
-	.min = 0x0d,
-	.min_center = 0x31,
-	.center = 0x55,
-	.center_max = 0x77,
-	.max = 0x9a,
+	.off = 0,
+	.deflt = 83,
+	.dim = 8,
+	.min = 8,
+	.min_center = 46,
+	.center = 83,
+	.center_max = 120,
+	.max = 155,
 };
 /*
 
@@ -335,14 +337,14 @@ static void check_ddi_work(struct work_struct *work)
 	}
 
 	ret = lms501xx_read_ddi_status_reg(lcd, ddi_status);
-
+/*
 	if (!ret) {
 		printk(KERN_INFO "%s, read failed\n", __func__);
 		set_dsim_hs_clk_toggle_count(0);
 		lms501xx_reinitialize_lcd();
 		return;
 	}
-
+*/
 	if (0x00 != ddi_status[1]) {
 		printk(KERN_INFO "%s, normal ddi_status 0x%02x\n",
 			__func__, ddi_status[1]);
@@ -435,6 +437,7 @@ read_retry:
 
 	return ret;
 }
+
 #ifdef DDI_STATUS_REG_PREVENTESD
 static void lms501xx_dsim_set_eot_mode(struct lcd_info *lcd, int enable)
 {
@@ -546,13 +549,31 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 
 		lcd->current_bl = lcd->bl;
 
-		dev_info(&lcd->ld->dev, "brightness=%d, bl=%d, candela=%d\n",
-				brightness, lcd->bl, lcd->candela);
+		dev_info(&lcd->ld->dev, "brightness=%d, bl=%d, candela=%d pwm=%d\n",
+				brightness, lcd->bl, lcd->candela, lcd->pwm);
 	}
 
 	mutex_unlock(&lcd->bl_lock);
 
 	return 0;
+}
+
+static int lms501xx_get_battery_temp(void)
+{
+	int  fd = 0;
+	unsigned char buff[10]="0";
+	int  temp = 0;
+
+	fd = sys_open("/sys/class/power_supply/battery/temp", O_RDONLY, 0);
+	if(fd > 0) {
+		sys_read(fd, buff, 5);
+		sys_close(fd);
+	}
+	sscanf(buff, "%d", &temp);
+
+	printk(KERN_INFO "%s temp=%d\n", __func__, temp);
+
+	return temp;
 }
 
 static int lms501xx_ldi_init(struct lcd_info *lcd)
@@ -568,9 +589,15 @@ static int lms501xx_ldi_init(struct lcd_info *lcd)
 	lms501xx_write(lcd, SEQ_SET_POWER, ARRAY_SIZE(SEQ_SET_POWER));
 	mdelay(5);
 	lms501xx_write(lcd, SEQ_SLEEP_OUT, ARRAY_SIZE(SEQ_SLEEP_OUT));
-	msleep(160);
+	msleep(200);
 	lms501xx_write(lcd, SEQ_SET_RGB, ARRAY_SIZE(SEQ_SET_RGB));
-	lms501xx_write(lcd, SEQ_SET_CYC, ARRAY_SIZE(SEQ_SET_CYC));
+	if( lms501xx_get_battery_temp() < 50 ) {
+		lcd->inversion = 1;
+		lms501xx_write(lcd, SEQ_SET_CYC_1DOT, ARRAY_SIZE(SEQ_SET_CYC_1DOT));
+	} else {
+		lcd->inversion = 2;
+		lms501xx_write(lcd, SEQ_SET_CYC, ARRAY_SIZE(SEQ_SET_CYC));
+	}
 	lms501xx_write(lcd, SEQ_SET_VCOM, ARRAY_SIZE(SEQ_SET_VCOM));
 	lms501xx_write(lcd, SEQ_SET_PTBA, ARRAY_SIZE(SEQ_SET_PTBA));
 	lms501xx_write(lcd, SEQ_SET_PANEL, ARRAY_SIZE(SEQ_SET_PANEL));
@@ -770,6 +797,79 @@ static ssize_t power_reduce_store(struct device *dev,
 }
 
 static DEVICE_ATTR(power_reduce, 0664, power_reduce_show, power_reduce_store);
+
+static ssize_t inversion_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	char temp[3];
+
+	sprintf(temp, "%d\n", lcd->inversion);
+	strcpy(buf, temp);
+
+	return strlen(buf);
+}
+
+static ssize_t inversion_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = strict_strtoul(buf, (unsigned int)0, (unsigned long *)&value);
+	if (rc < 0)
+		return rc;
+	else {
+		mutex_lock(&lcd->bl_lock);
+		if(value == 1)
+		{
+			lcd->inversion = 1;
+			lms501xx_write(lcd, SEQ_SET_CYC_1DOT, ARRAY_SIZE(SEQ_SET_CYC_1DOT));
+		} else {
+			lcd->inversion = 2;
+			lms501xx_write(lcd, SEQ_SET_CYC, ARRAY_SIZE(SEQ_SET_CYC));
+		}
+		mutex_unlock(&lcd->bl_lock);
+	}
+	return size;
+}
+
+static DEVICE_ATTR(inversion, 0664, inversion_show, inversion_store);
+
+static ssize_t bl_level_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	char temp[3];
+
+	sprintf(temp, "%d\n", lcd->pwm);
+	strcpy(buf, temp);
+
+	return strlen(buf);
+}
+
+static ssize_t bl_level_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = strict_strtoul(buf, (unsigned int)0, (unsigned long *)&value);
+	if (rc < 0)
+		return rc;
+	else {
+		mutex_lock(&lcd->bl_lock);
+		lcd->pwm = value;
+		lms501xx_gamma_ctl(lcd);
+		lms501xx_set_cabc(lcd);
+		mutex_unlock(&lcd->bl_lock);
+	}
+	return size;
+}
+
+static DEVICE_ATTR(bl_level, 0664, bl_level_show, bl_level_store);
 
 static ssize_t siop_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -1000,14 +1100,25 @@ static int lms501xx_probe(struct device *dev)
 	lcd->bl = DEFAULT_GAMMA_LEVEL;
 	lcd->current_bl = lcd->bl;
 	lcd->siop_enable = 0;
-	lcd->current_cabc = 0;
+	lcd->current_cabc = 1;
 
 	lcd->power = FB_BLANK_UNBLANK;
 	lcd->ldi_enable = 1;
 	lcd->connected = 1;
 	lcd->auto_brightness = 0;
+	lcd->inversion = 1;
 
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_power_reduce);
+	if (ret < 0)
+		dev_err(&lcd->ld->dev,
+			 "failed to add sysfs entries, %d\n", __LINE__);
+
+	ret = device_create_file(&lcd->ld->dev, &dev_attr_inversion);
+	if (ret < 0)
+		dev_err(&lcd->ld->dev,
+			 "failed to add sysfs entries, %d\n", __LINE__);
+
+	ret = device_create_file(&lcd->ld->dev, &dev_attr_bl_level);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev,
 			 "failed to add sysfs entries, %d\n", __LINE__);

@@ -407,7 +407,9 @@ int s5p_dsim_dcs_rd_data(void *ptr, u8 addr, u16 count, u8 *buf)
 {
 	u32 i, temp;
 	u8 response = 0;
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 	u8 resp1, resp2;
+#endif
 	u16 rxsize;
 	u32 txhd;
 	u32 rxhd;
@@ -425,16 +427,28 @@ int s5p_dsim_dcs_rd_data(void *ptr, u8 addr, u16 count, u8 *buf)
 
 	switch (count) {
 	case 1:
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 		resp1 = MIPI_RESP_DCS_RD_1;
 		resp2 = MIPI_RESP_GENERIC_RD_1;
+#else
+		response = MIPI_RESP_DCS_RD_1;
+#endif
 		break;
 	case 2:
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 		resp1 = MIPI_RESP_DCS_RD_2;
 		resp2 = MIPI_RESP_GENERIC_RD_2;
+#else
+		response = MIPI_RESP_DCS_RD_2;
+#endif
 		break;
 	default:
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 		resp1 = MIPI_RESP_DCS_RD_LONG;
 		resp2 = MIPI_RESP_GENERIC_RD_LONG;
+#else
+		response = MIPI_RESP_DCS_RD_LONG;
+#endif
 		break;
 	}
 
@@ -456,11 +470,18 @@ int s5p_dsim_dcs_rd_data(void *ptr, u8 addr, u16 count, u8 *buf)
 
 	rxhd = readl(reg_base + S5P_DSIM_RXFIFO);
 	dev_info(dsim->dev, "rxhd : %x\n", rxhd);
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 	response = (u8)(rxhd & 0xff);
 	if (response != resp1 && response != resp2) {
 		dev_err(dsim->dev, "[DSIM:ERROR]:%s wrong response rxhd : %x, resp1:%x resp2:%x\n"
 		    , __func__, rxhd, resp1, resp2);
 		goto clear_rx_fifo;
+#else
+	if ((u8)(rxhd & 0xff) != response) {
+		dev_err(dsim->dev, "[DSIM:ERROR]:%s wrong response rxhd : %x, response:%x\n"
+		    , __func__, rxhd, response);
+		goto error_read;
+#endif
 	}
 	/* for short packet */
 	if (count <= 2) {
@@ -474,7 +495,11 @@ int s5p_dsim_dcs_rd_data(void *ptr, u8 addr, u16 count, u8 *buf)
 		if (rxsize != count) {
 			dev_err(dsim->dev, "[DSIM:ERROR]:%s received data size mismatch received : %d, requested : %d\n",
 				__func__, rxsize, count);
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 			goto clear_rx_fifo;
+#else
+			goto error_read;
+#endif
 		}
 
 		for (i = 0; i < rxsize>>2; i++) {
@@ -495,18 +520,14 @@ int s5p_dsim_dcs_rd_data(void *ptr, u8 addr, u16 count, u8 *buf)
 		}
 	}
 
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 	temp = readl(reg_base + S5P_DSIM_RXFIFO);
-
-#if 0
-	if (temp != DSIM_RX_FIFO_READ_DONE) {
-		dev_warn(dsim->dev, "[DSIM:WARN]:%s Can't found RX FIFO READ DONE FLAG : %x\n", __func__, temp);
-		goto clear_rx_fifo;
-	}
 #endif
 
 	mutex_unlock(&dsim_rd_wr_mutex);
 	return rxsize;
 
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 clear_rx_fifo:
 	i = 0;
 	while (1) {
@@ -517,6 +538,9 @@ clear_rx_fifo:
 		i++;
 	}
 	dev_info(dsim->dev, "[DSIM:INFO] : %s done count : %d, temp : %08x\n", __func__, i, temp);
+#else
+error_read:
+#endif
 
 	mutex_unlock(&dsim_rd_wr_mutex);
 	return 0;
@@ -1091,6 +1115,9 @@ static unsigned char s5p_dsim_set_data_transfer_mode(struct dsim_global *dsim,
 int s5p_dsim_register_lcd_driver(struct mipi_lcd_driver *lcd_drv)
 {
 	struct mipi_lcd_info *lcd_info = NULL;
+#if defined(CONFIG_FB_S5P_LMS501XX)
+	struct dsim_global *dsim = g_dsim;
+#endif
 
 	lcd_info = kmalloc(sizeof(struct mipi_lcd_info), GFP_KERNEL);
 	if (lcd_info == NULL)
@@ -1108,7 +1135,12 @@ int s5p_dsim_register_lcd_driver(struct mipi_lcd_driver *lcd_drv)
 	list_add_tail(&lcd_info->list, &lcd_info_list);
 	mutex_unlock(&mipi_lock);
 
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 	pr_debug("registered lcd panel driver(%s) to mipi-dsi driver\n", lcd_drv->name);
+#else
+	dev_dbg(dsim->dev, "registered lcd panel driver(%s) to mipi-dsi driver\n", lcd_drv->name);
+#endif
+
 
 	return 0;
 }
@@ -1368,6 +1400,15 @@ static int s5p_dsim_resume(struct platform_device *pdev)
 #endif
 #endif
 
+#if defined(CONFIG_FB_S5P_LMS501XX)
+u32 read_dsim_register(u32 num)
+{
+	struct dsim_global *dsim = g_dsim;
+
+	return readl(dsim->reg_base + (num*4));
+}
+#endif
+
 static ssize_t hs_toggle_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -1564,8 +1605,10 @@ static int s5p_dsim_probe(struct platform_device *pdev)
 		goto mipi_drv_err;
 	}
 
+#if defined(CONFIG_FB_S5P_S6E8AA0)
 	if (dsim->mipi_ddi_pd->lcd_power_on)
 		dsim->mipi_ddi_pd->lcd_power_on(dsim->dev, 1);
+#endif
 
 	ret = dsim->mipi_drv->probe(&dsim->panel);
 	if (ret < 0) {
