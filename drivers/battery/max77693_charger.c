@@ -496,7 +496,7 @@ void max77693_set_input_current(struct max77693_charger_data *chg_data,
 	check_charger_unlock_state(chg_data);
 #endif
 
-#if defined(CONFIG_MACH_M0_DUOSCTC) || defined(CONFIG_MACH_ZEST)
+#if defined(CONFIG_MACH_M0_DUOSCTC) || defined(CONFIG_MACH_ZEST) || defined(CONFIG_MACH_BAFFIN)
 	if (set_current == OFF_CURR) {
 		pr_debug("%s: buck off current(%d)\n", __func__, set_current);
 		max77693_write_reg(i2c, MAX77693_CHG_REG_CHG_CNFG_09, 0);

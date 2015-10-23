@@ -697,6 +697,43 @@ static struct s3cfb_lcd lcd_panel_pdata = {
 };
 #endif
 
+#if defined(CONFIG_FB_S5P_LMS501XX)
+static int reset_lcd(void)
+{
+	int err;
+
+	err = gpio_request(GPIO_MLCD_RST, "MLCD_RST");
+	if (err) {
+		printk(KERN_ERR "failed to request GPY4(5) for "
+			"lcd reset control\n");
+		return -EINVAL;
+	}
+
+	gpio_direction_output(GPIO_MLCD_RST, 1);
+	usleep_range(5000, 5000);
+	gpio_set_value(GPIO_MLCD_RST, 0);
+	usleep_range(5000, 5000);
+	gpio_set_value(GPIO_MLCD_RST, 1);
+	usleep_range(5000, 5000);
+	gpio_free(GPIO_MLCD_RST);
+	return 0;
+}
+
+static void lcd_cfg_gpio(void)
+{
+	/* MLCD_RST */
+	s3c_gpio_cfgpin(GPIO_MLCD_RST, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_MLCD_RST, S3C_GPIO_PULL_NONE);
+
+#if defined(GPIO_LCD_22V_EN_00)
+	/* LCD_EN */
+	s3c_gpio_cfgpin(GPIO_LCD_22V_EN_00, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_LCD_22V_EN_00, S3C_GPIO_PULL_NONE);
+#endif
+
+	return;
+}
+#else
 static int reset_lcd(void)
 {
 #if defined(GPIO_MLCD_RST)
@@ -738,17 +775,69 @@ static int lcd_cfg_gpio(void)
 	s3c_gpio_setpull(GPIO_MLCD_RST, S3C_GPIO_PULL_NONE);
 #endif
 
-#if defined(CONFIG_FB_S5P_LMS501XX)
-	err = gpio_request(GPIO_LCD_BL_EN, "LCD_BL_EN");
-	if (err) {
-		pr_err("failed to request LCD_BL_EN gpio\n");
-		return -EPERM;
-	}
-#endif
-
 	return 0;
 }
+#endif
 
+#if defined(CONFIG_FB_S5P_LMS501XX)
+static int lcd_power_on(void *ld, int enable)
+{
+	struct regulator *regulator;
+	int err;
+
+	printk(KERN_INFO "%s : enable=%d\n", __func__, enable);
+
+	err = gpio_request(GPIO_LCD_BL_EN, "LCD_BL_EN");
+	if (err) {
+		printk(KERN_ERR "failed to request GPF0[5] for "
+		"LCD_BL_EN control\n");
+		return -EPERM;
+	}
+	err = gpio_request(GPIO_MLCD_RST, "MLCD_RST");
+	if (err) {
+		printk(KERN_ERR "failed to request GPY4[5] for "
+			"MLCD_RST control\n");
+		return -EPERM;
+	}
+
+	err = gpio_request(GPIO_LCD_22V_EN_00, "LCD_EN");
+	if (err) {
+		printk(KERN_ERR "failed to request GPM4[4] for "
+			"LCD_2.2V_EN control\n");
+		return -EPERM;
+	}
+
+	if (enable) {
+		gpio_set_value(GPIO_LCD_22V_EN_00, GPIO_LEVEL_HIGH);
+		msleep(25);
+		regulator = regulator_get(NULL, "vlcd_3.3v");
+		if (IS_ERR(regulator))
+			goto out;
+		regulator_enable(regulator);
+		regulator_put(regulator);
+	gpio_set_value(GPIO_LCD_BL_EN, 1);
+	} else {
+		regulator = regulator_get(NULL, "vlcd_3.3v");
+		if (IS_ERR(regulator))
+			goto out;
+		if (regulator_is_enabled(regulator))
+			regulator_force_disable(regulator);
+		regulator_put(regulator);
+
+		gpio_set_value(GPIO_LCD_22V_EN_00, GPIO_LEVEL_LOW);
+		gpio_set_value(GPIO_MLCD_RST, 0);
+		gpio_set_value(GPIO_LCD_BL_EN, 0);
+	}
+
+out:
+/* Release GPIO */
+	gpio_free(GPIO_MLCD_RST);
+	gpio_free(GPIO_LCD_22V_EN_00);
+	gpio_free(GPIO_LCD_BL_EN);
+return 0;
+
+}
+#else
 static int lcd_power_on(void *ld, int enable)
 {
 	struct regulator *regulator;
@@ -759,9 +848,6 @@ static int lcd_power_on(void *ld, int enable)
 	if (enable) {
 #if defined(GPIO_LCD_POWER_EN)
 		gpio_set_value(GPIO_LCD_POWER_EN, GPIO_LEVEL_HIGH);
-#endif
-#if defined(CONFIG_FB_S5P_LMS501XX)
-		msleep(25);
 #endif
 		for (i = 0; i < ARRAY_SIZE(lcd_regulator_arr); i++) {
 			pr_debug("%s: regulator name : %s, enable : %d\n",
@@ -797,13 +883,10 @@ static int lcd_power_on(void *ld, int enable)
 #endif
 #endif
 	}
-#if defined(CONFIG_FB_S5P_LMS501XX)
-	gpio_set_value(GPIO_LCD_BL_EN, enable);
-#endif
-
 out:
 	return 0;
 }
+#endif
 
 static void s5p_dsim_mipi_power_control(int enable)
 {

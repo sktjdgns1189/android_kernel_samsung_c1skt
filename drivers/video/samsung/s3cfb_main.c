@@ -275,6 +275,61 @@ static void dump_register(void __iomem *reg, u32 pa, u32 end_offset)
 	}
 }
 
+#if defined(CONFIG_FB_S5P_LMS501XX)
+void read_lcd_register(void)
+{
+	struct s3cfb_global *fbdev[1];
+	u32 reg_val[156] = {0,};
+	u32 reg;
+	u32 i;
+
+	fbdev[0] = fbfimd->fbdev[0];
+
+	if (fbdev[0]->system_state == POWER_OFF) {
+		dev_err(fbdev[0]->dev, "%s::system_state is POWER_OFF\n", __func__);
+		return;
+	}
+
+	/*11C00000 ~ 11C00260*/
+	reg = readl(fbdev[0]->regs_org + S3C_VIDCON1);
+	dev_info(fbdev[0]->dev, "11C000%02X| %08X", S3C_VIDCON1, reg);
+	for (i = 0; i < 156; i++)
+		reg_val[i] = readl(fbdev[0]->regs_org + (i*4));
+
+	for (i = 0; i < 39; i++)
+		dev_info(fbdev[0]->dev, "11C0%04X| %08X %08X %08X %08X",
+		(i*16), reg_val[i*4], reg_val[i*4+1], reg_val[i*4+2], reg_val[i*4+3]);
+
+	/*11C040A0 ~ 11C04110*/
+	for (i = 0; i < 32; i++)
+		reg_val[i] = readl(fbdev[0]->regs_org + (0x40A0)+(i*4));
+
+	for (i = 0; i < 8; i++)
+		dev_info(fbdev[0]->dev, "11C0%04X| %08X %08X %08X %08X",
+		(0x40A0)+(i*16), reg_val[i*4], reg_val[i*4+1], reg_val[i*4+2], reg_val[i*4+3]);
+#ifdef CONFIG_FB_S5P_MDNIE
+	reg = readl(fbdev[0]->ielcd_regs + S3C_VIDCON1);
+	dev_info(fbdev[0]->dev, "11C400%02X| %08X", S3C_VIDCON1, reg);
+
+	for (i = 0; i < 4; i++)
+		reg_val[i] = readl(fbdev[0]->ielcd_regs + (i*4));
+
+	for (i = 0; i < 1; i++)
+		dev_info(fbdev[0]->dev, "11C400%02X| %08X %08X %08X %08X",
+		(i*16), reg_val[i*4], reg_val[i*4+1], reg_val[i*4+2], reg_val[i*4+3]);
+#endif
+#ifdef CONFIG_FB_S5P_MIPI_DSIM
+	reg = read_dsim_register(0);
+	dev_info(fbdev[0]->dev, "11C80000| %08X", reg);
+	for (i = 0; i < 4; i++)
+		reg_val[i] = read_dsim_register(i);
+
+	for (i = 0; i < 1; i++)
+		dev_info(fbdev[0]->dev, "11C800%02X| %08X %08X %08X %08X",
+		(i*16), reg_val[i*4], reg_val[i*4+1], reg_val[i*4+2], reg_val[i*4+3]);
+#endif
+}
+#else
 void read_lcd_register(void)
 {
 	void __iomem *reg;
@@ -295,6 +350,7 @@ void read_lcd_register(void)
 	dump_register(reg, S5P_PA_DSIM0, S5P_DSIM_TIMEOUT);
 #endif
 }
+#endif
 
 static int s3cfb_sysfs_show_win_power(struct device *dev,
 				struct device_attribute *attr, char *buf)
